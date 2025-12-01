@@ -3,6 +3,8 @@
 
 # Sentinel-2 downloaded data
 sentinel_data/
+sentinel_data2/
+sentinel_data3/
 
 SE511.ipynb
 task.txt
