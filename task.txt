@@ -1,0 +1,22 @@
+2.5 Classification and change detection
+The goal of this project is to try to classify different zones in an area-of-interest (vegetation, buildings,
+water) based indicators that you can construct from the different spectral bands in the Sentinel-2
+radiometric images. These indicators are:
+• Normalized Difference Vegetation Index (NDVI)
+• Normalized Difference Built-up Index (NDBI)
+• Normalized Difference Water Index (NDWI)
+Choose in Terrascope an area of an appropriate size around coordinates (WGS84)*:
+• latitude = 50.379123,
+• longitude = 4.392829
+Perform the following actions:
+1. Find all the Sentinel-2 images within the period 2017-2019 with no cloud cover**.
+2. Compute the NDVI, NDBI and NDWI for these images.
+3. For each image create 3 masks (a mask for each class: vegetation, built-up, water) based on
+suitable thresholding of NDVI, NDBI and NDWI bands.
+4. Compare the classes of each subsequent pair of images to detect changes (difference between
+masks).
+5. Return the dates of any changes and the classes concerned.
+
+*You can transform coordinates to other reference systems with the pyproj package
+**For every S2 product in the terrascope catalogue, you can find the proportion of cloud cover with
+product.properties["productInformation"]["cloudCover"]

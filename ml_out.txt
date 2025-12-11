@@ -1,0 +1,76 @@
+rf = RandomForestClassifier(
+    n_estimators=150,
+    max_depth=15,
+    n_jobs=-1,
+    random_state=42,
+    verbose=2, 
+)
+
+Validation accuracy: 0.857
+Validation macro-F1: 0.712
+
+
+Detailed report:
+              precision    recall  f1-score   support
+
+  Vegetation       0.88      0.93      0.91    535090
+    Built-up       0.79      0.69      0.74    205942
+       Water       0.88      0.34      0.49     11732
+
+    accuracy                           0.86    752764
+   macro avg       0.85      0.66      0.71    752764
+weighted avg       0.85      0.86      0.85    752764
+
+rf = RandomForestClassifier(
+    n_estimators=300,
+    max_depth=20,
+    n_jobs=-1,
+    random_state=42,
+    verbose=2, 
+)
+
+Validation accuracy: 0.858
+Validation macro-F1: 0.716
+
+Detailed report:
+              precision    recall  f1-score   support
+
+  Vegetation       0.88      0.93      0.91    535090
+    Built-up       0.78      0.70      0.74    205942
+       Water       0.85      0.36      0.50     11732
+
+    accuracy                           0.86    752764
+   macro avg       0.84      0.66      0.72    752764
+weighted avg       0.85      0.86      0.85    752764
+
+All required bands found:
+[Parallel(n_jobs=16)]: Using backend ThreadingBackend with 16 concurrent workers.
+[Parallel(n_jobs=16)]: Done   9 tasks      | elapsed:    0.1s
+[Parallel(n_jobs=16)]: Done 130 tasks      | elapsed:    1.7s
+[Parallel(n_jobs=16)]: Done 300 out of 300 | elapsed:    3.9s finished
+Vegetation coverage: 75.51%
+Built-up coverage: 23.62%
+Water coverage: 0.87%
+
+rf = RandomForestClassifier(
+    n_estimators=100,
+    max_depth=10,
+    n_jobs=-1,
+    random_state=42,
+    verbose=2, 
+)
+
+
+Validation accuracy: 0.852
+Validation macro-F1: 0.689
+
+Detailed report:
+              precision    recall  f1-score   support
+
+  Vegetation       0.87      0.93      0.90    535090
+    Built-up       0.78      0.68      0.72    205942
+       Water       0.89      0.29      0.44     11732
+
+    accuracy                           0.85    752764
+   macro avg       0.85      0.63      0.69    752764
+weighted avg       0.85      0.85      0.85    752764

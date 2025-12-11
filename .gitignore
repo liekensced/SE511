@@ -6,7 +6,10 @@ sentinel_data/
 sentinel_data2/
 sentinel_data3/
 sentinel_data_subset/
+sentinel_data_subset_small/
 sentinel_data_copy/
+*.pkl
+*.zip
 
 SE511.ipynb
 task.txt

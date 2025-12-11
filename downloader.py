@@ -28,7 +28,7 @@ cloudcover_threshold = 1
 
 print(f"Searching for products from {startDate} to {endDate}")
 print(f"Area of Interest: lat={lat}, lon={lon}")
-print(f"Bounding box: {bbox}")
+print(f"Bounding box (SMALL): {bbox}")
 
 # Get all products in the date range and location
 products = list(catalogue.get_products(
@@ -62,6 +62,7 @@ else:
 
 # Obtain an access token using OIDC password grant
 import os
+import threading
 import requests
 from pathlib import Path
 
@@ -81,26 +82,62 @@ token_url = "https://sso.terrascope.be/auth/realms/terrascope/protocol/openid-co
 USERNAME = os.getenv("TERRASCOPE_USERNAME")
 PASSWORD = os.getenv("TERRASCOPE_PASSWORD")
 
-if not USERNAME or not PASSWORD:
-    print("Error: Set TERRASCOPE_USERNAME and TERRASCOPE_PASSWORD in .env file or environment variables.")
-    ACCESS_TOKEN = None
-else:
-    data = {
-        "grant_type": "password",
-        "client_id": "public",
-        "username": USERNAME,
-        "password": PASSWORD,
-    }
+# Globals to hold the current token and expiry info
+ACCESS_TOKEN = None
+ACCESS_EXPIRES_IN = None
+_REFRESH_STOP_EVENT = threading.Event()
 
-    try:
-        resp = requests.post(token_url, data=data, timeout=30)
-        resp.raise_for_status()
-        token_payload = resp.json()
-        ACCESS_TOKEN = token_payload["access_token"]
-        print("Token acquired. Expires in:", token_payload.get("expires_in"), "seconds")
-    except Exception as e:
+def get_access_token():
+    """Fetch a new access token and store its expiry."""
+    global ACCESS_TOKEN, ACCESS_EXPIRES_IN
+
+    if not USERNAME or not PASSWORD:
+        print("Error: Set TERRASCOPE_USERNAME and TERRASCOPE_PASSWORD in .env file or environment variables.")
         ACCESS_TOKEN = None
-        print("Failed to obtain token:", e)
+        ACCESS_EXPIRES_IN = None
+    else:
+        data = {
+            "grant_type": "password",
+            "client_id": "public",
+            "username": USERNAME,
+            "password": PASSWORD,
+        }
+
+        try:
+            resp = requests.post(token_url, data=data, timeout=30)
+            resp.raise_for_status()
+            token_payload = resp.json()
+            ACCESS_TOKEN = token_payload["access_token"]
+            ACCESS_EXPIRES_IN = int(token_payload.get("expires_in", 0)) or None
+            print("Token acquired. Expires in:", ACCESS_EXPIRES_IN, "seconds")
+        except Exception as e:
+            ACCESS_TOKEN = None
+            ACCESS_EXPIRES_IN = None
+            print("Failed to obtain token:", e)
+    return ACCESS_TOKEN
+
+
+def start_token_refresher(buffer_seconds: int = 60):
+    """Start a daemon thread that refreshes the token before expiry.
+
+    The thread stops automatically when the process ends, and it can be
+    stopped manually by setting `_REFRESH_STOP_EVENT`.
+    """
+    if ACCESS_EXPIRES_IN is None:
+        return None
+
+    def _refresh_loop():
+        interval = max(5, ACCESS_EXPIRES_IN - buffer_seconds)
+        while not _REFRESH_STOP_EVENT.wait(interval):
+            get_access_token()
+            # Update interval in case the new token has a different lifetime
+            if ACCESS_EXPIRES_IN is None:
+                break
+            interval = max(5, ACCESS_EXPIRES_IN - buffer_seconds)
+
+    t = threading.Thread(target=_refresh_loop, daemon=True)
+    t.start()
+    return t
 
 
 import requests
@@ -116,31 +153,26 @@ transformer = Transformer.from_crs("epsg:32631", "epsg:4326", always_xy=True)
 easting, northing = transformer.transform(lon, lat)
 print(f"Exact WGS84: {easting=:.6f}, {northing=:.6f}")
 
-padding_meters = 6000                     # change freely (6000 → 12×12 km)
-
-west  = easting  - padding_meters
-east  = easting  + padding_meters
-south = northing - padding_meters
-north = northing + padding_meters
-
-print(f"Window: {west:.0f}E – {east:.0f}E, {south:.0f}N – {north:.0f}N "
-    f"({2*padding_meters/1000:.0f}×{2*padding_meters/1000:.0f} km)")
-
 
 # ------------------------------------------------------------------
 # 3. Download only a centered window around the point (in WGS84)
 # ------------------------------------------------------------------
+ACCESS_TOKEN = get_access_token()
+start_token_refresher()
 if ACCESS_TOKEN is None or len(no_cloud_products) == 0:
     raise RuntimeError("Check ACCESS_TOKEN and no_cloud_products first!")
 
-download_dir = Path("sentinel_data_subset")
+download_dir = Path("sentinel_data_subset_small")
+
+if download_dir == Path("sentinel_data_subset_small"):
+    print("Using small download directory for testing!")
+
 download_dir.mkdir(exist_ok=True)
 
 # Bands we want at 10m and 20m resolution
 required_bands = ['B02', 'B03', 'B04', 'B08', 'B11']  # B11 is 20m
 
 downloaded = 0
-
 # Define a 6x6 km box in WGS84
 # At this latitude (50°N):
 # - 1° latitude ≈ 111 km
@@ -189,7 +221,6 @@ for idx, product in enumerate(no_cloud_products, 1):
                     # Transform WGS84 box corners to the dataset's CRS
                     from pyproj import Transformer as ProjTransformer
                     transformer_to_src = ProjTransformer.from_crs("epsg:4326", crs_src, always_xy=True)
-                    
                     # Four corners of the WGS84 box
                     wgs84_xs = [west, east, east, west]
                     wgs84_ys = [north, north, south, south]
@@ -198,6 +229,9 @@ for idx, product in enumerate(no_cloud_products, 1):
                     src_coords = [transformer_to_src.transform(x, y) for x, y in zip(wgs84_xs, wgs84_ys)]
                     xs = [c[0] for c in src_coords]
                     ys = [c[1] for c in src_coords]
+                    print(f"   Source CRS: {crs_src}")
+                    print(f"   WGS84 box corners: {list(zip(wgs84_xs, wgs84_ys))}")
+                    print(f"   Transformed box corners in source CRS: {list(zip(xs, ys))}")
 
                     # Transform to pixel coordinates
                     pixel_coords = [~src.transform * (x, y)
@@ -252,3 +286,4 @@ for idx, product in enumerate(no_cloud_products, 1):
 
 print(f"\nDone! Downloaded {downloaded} subsetted bands to:")
 print(f"   {download_dir.resolve()}")
+_REFRESH_STOP_EVENT.set()
